@@ -5,7 +5,7 @@
 #include "../pixel.h"
 #include "../imageio.h"
 #include "../imagecompare.h"
-#include "../imgkernel.h"
+#include "../imagekernel.h"
 
 struct timespec time_start,time_end;
 
@@ -692,4 +692,6 @@ Image * scaleBinaryImage(Image * input){
   }
   return rVal;
 }
+
+
 
