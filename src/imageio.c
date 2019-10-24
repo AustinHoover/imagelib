@@ -54,7 +54,7 @@ int writePPM(char * path, Image * img){
   file = fopen(path,"w");
   if(file == NULL){
     printf("Unable to open file for writing!\n");
-    rval = 1;
+    rVal = 1;
   } else {
     fprintf(file,"P5 %d %d 255\n",COLS,ROWS);
     fwrite(output->pixels,1,ROWS*COLS,file);
