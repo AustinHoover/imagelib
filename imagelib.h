@@ -3,7 +3,7 @@
 
 #include "pixel.h"
 #include "imageio.h"
-#include "imgkernel.h"
+#include "imagekernel.h"
 #include "imagecompare.h"
 
 #endif

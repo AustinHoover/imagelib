@@ -50,6 +50,13 @@
   */
 Image * applyKernelToImage(Image * image);
 /**
+  @brief Applies a sobel filter
+  Applies a sobel kernel to an image.
+  @param Image The image to apply the gaussian blur to
+  @return A new image object that is a sobel-filtered version of \p Image
+  */
+Image * applySobelToImage(Image * image);
+/**
   @brief Use applySlidingKernelToImage() instead
   Applies a guassian blur kernel to an image. Usage of applySlidingKerneToImage() is prefered as it is significantly more performant.
   @param Image The image to apply the gaussian blur to
@@ -201,5 +208,27 @@ Image * getTransitionCount(Image * input);
   @return The input image with less rogue branchpoints
   */
 Image * deleteRogueBranches(Image * input, Image * counts);
-
+/**
+  Structure that contains the location of a single active contour point
+  */
+typedef struct active_contour_point {
+  int x;
+  int y;
+  struct active_contour_point * next;
+} active_contour_point;
+/**
+  @brief Steps the active contour points on the image
+  @param Input
+  @param pt_list
+  @return
+  */
+active_contour_point * step_active_contour(Image * input, active_contour_point * pt_list);
+/**
+  @brief Label contour points
+  Labels the input image with the points in the contour point list
+  @param Input The image to label
+  @param pt_list The list of active contour points to label the input with
+  @return The input image labeled
+  */
+Image * label_active_contour(Image * input, active_contour_point * pt_list);
 #endif

@@ -48,6 +48,44 @@ Image * applyKernelToImage(Image * image){
   return rVal;
 }
 
+
+Image * applySobelToImage(Image * image){
+  Image * rVal = NULL;
+  rVal = (Image *)calloc(1,sizeof(Image));
+  rVal->width = image->width;
+  rVal->height = image->height;
+  rVal->type = image->type;
+  rVal->pixels = calloc(rVal->width * rVal->height,sizeof(float));
+    int x = 0;
+    int y = 0;
+    for(x = 0; x < image->width; x++){
+      for(y = 0; y < image->height; y++){
+        float endVal = 0;
+        float sobelX = 0;
+        float sobelY = 0;
+        //y-major sobel
+        sobelY = sobelY + safeGetPixel(image,x-1,y-1) * -1;
+        sobelY = sobelY + safeGetPixel(image,x-0,y-1) * -2;
+        sobelY = sobelY + safeGetPixel(image,x+1,y-1) * -1;
+        sobelY = sobelY + safeGetPixel(image,x-1,y+1) * 1;
+        sobelY = sobelY + safeGetPixel(image,x-0,y+1) * 2;
+        sobelY = sobelY + safeGetPixel(image,x+1,y+1) * 1;
+        //x-major sobel
+        sobelX = sobelX + safeGetPixel(image,x-1,y-1) * -1;
+        sobelX = sobelX + safeGetPixel(image,x-1,y-0) * -2;
+        sobelX = sobelX + safeGetPixel(image,x-1,y+1) * -1;
+        sobelX = sobelX + safeGetPixel(image,x+1,y-1) * 1;
+        sobelX = sobelX + safeGetPixel(image,x+1,y+0) * 2;
+        sobelX = sobelX + safeGetPixel(image,x+1,y+1) * 1;
+        endVal = sqrt(pow(sobelX,2) + pow(sobelY,2));
+        safeSetPixel(rVal,x,y,endVal);
+        //((float *)(rVal->pixels))[y*rVal->width+x] = endVal;
+      }
+    }
+  return rVal;
+}
+
+
 Image * applyLinearKernelToImage(Image * image, int horizontalOrVertical){
   Image * rVal = NULL;
   rVal = (Image *)calloc(1,sizeof(Image));
@@ -694,4 +732,151 @@ Image * scaleBinaryImage(Image * input){
 }
 
 
+
+
+//need to fine-tune the forces at work still. Very WIP!
+
+active_contour_point * step_active_contour(Image * input, active_contour_point * pt_list){
+  active_contour_point * rVal = (active_contour_point *)malloc(sizeof(active_contour_point));
+  active_contour_point * current = pt_list;
+  active_contour_point * next = current->next;
+  active_contour_point * rVal_iterator = rVal;
+  //calculate centroid
+  int x_sum = 0;
+  int y_sum = 0;
+  int num = 0;
+  while(current != NULL){
+    x_sum = x_sum + current->x;
+    y_sum = y_sum + current->y;
+    num = num + 1;
+    current = current->next;
+  }
+  int centroid_x = x_sum / num;
+  int centroid_y = y_sum / num;
+  //calculate next points
+  int value_field_dim = 3;
+  int half_dim = value_field_dim/2;
+  int x,y;
+  int value_field;
+  int min_x, min_y, min_val;
+  current = pt_list;
+  active_contour_point * prev = pt_list;
+  current = current->next;
+  while(next != NULL){
+    //set and search field
+    min_val = -1;
+    for(x = -half_dim; x < half_dim+1; x++){
+      for(y = -half_dim; y < half_dim+1; y++){
+        int centroid_x_relative = centroid_x - (current->x + x);
+        int centroid_y_relative = centroid_y - (current->y + y);
+        int next_x_relative = next->x - (current->x + x);
+        int next_y_relative = next->y - (current->y + y);
+        int prev_x_relative = prev->x - (current->x + x);
+        int prev_y_relative = prev->y - (current->y + y);
+        int dist_to_next = sqrt(pow(next_x_relative,2) + pow(next_y_relative,2));
+        int dist_to_prev = sqrt(pow(prev_x_relative,2) + pow(prev_y_relative,2));
+        //int dist_to_centroid = pow((centroid_x_relative - next_x_relative)-x,2) +
+        //    pow((centroid_y_relative - next_y_relative) - y,2);
+        int dist_to_centroid = sqrt(pow(centroid_x_relative,2) + pow(centroid_y_relative,2));
+        //int dist_to_current = pow(half_dim-x,2) + pow(half_dim-y,2);
+        int value_at_current = safeGetPixel(input,current->x + x,current->y + y);
+        value_field = pow(dist_to_next,2) + pow(dist_to_prev,2) + pow(dist_to_centroid,2) + pow(value_at_current,2);
+        if(min_val == -1){
+          min_val = value_field;
+          min_x = x;
+          min_y = y;
+        } else {
+          if(value_field < min_val){
+            min_val = value_field;
+            min_x = x;
+            min_y = y;
+          }
+        }
+      }
+    }
+    rVal_iterator->x = current->x + min_x;
+    rVal_iterator->y = current->y + min_y;
+    rVal_iterator->next = (active_contour_point *)malloc(sizeof(active_contour_point));
+    prev = prev->next;
+    current = next;
+    next = current->next;
+    if(next != NULL){
+      rVal_iterator = rVal_iterator->next;
+    } else {
+      free(rVal_iterator->next);
+    }
+  }
+  //handle the loop-around
+  //
+  //Where we're at:
+  //      old list: [head]  ----      ----    [2nd to last][last]
+  //iterating list: [next]                    [prev]       [current]
+  //
+  rVal_iterator->next = (active_contour_point *)malloc(sizeof(active_contour_point));
+  rVal_iterator = rVal_iterator->next;
+  rVal_iterator->next = NULL;
+  //current = rVal_iterator;
+  next = pt_list;
+  min_val = -1;
+  for(x = -half_dim; x < half_dim+1; x++){
+    for(y = -half_dim; y < half_dim+1; y++){
+      int centroid_x_relative = centroid_x - (current->x + x);
+      int centroid_y_relative = centroid_y - (current->y + y);
+      int next_x_relative = next->x - (current->x + x);
+      int next_y_relative = next->y - (current->y + y);
+      int prev_x_relative = prev->x - (current->x + x);
+      int prev_y_relative = prev->y - (current->y + y);
+      int dist_to_next = sqrt(pow(next_x_relative,2) + pow(next_y_relative,2));
+      int dist_to_prev = sqrt(pow(prev_x_relative,2) + pow(prev_y_relative,2));
+      //int dist_to_centroid = pow((centroid_x_relative - next_x_relative)-x,2) +
+      //    pow((centroid_y_relative - next_y_relative) - y,2);
+      int dist_to_centroid = sqrt(pow(centroid_x_relative,2) + pow(centroid_y_relative,2));
+      int value_at_current = safeGetPixel(input,current->x + x,current->y + y);
+      value_field = pow(dist_to_next,2) + pow(dist_to_prev,2) + pow(dist_to_centroid,2) + pow(value_at_current,2);
+      if(min_val == -1){
+        min_val = value_field;
+        min_x = x;
+        min_y = y;
+      } else {
+        if(value_field < min_val){
+          min_val = value_field;
+          min_x = x;
+          min_y = y;
+        }
+      }
+    }
+  }
+  rVal_iterator->x = current->x + min_x;
+  rVal_iterator->y = current->y + min_y;
+  return rVal;
+}
+
+Image * label_active_contour(Image * input, active_contour_point * pt_list){
+  //clone input image
+  Image * rVal = (Image *)malloc(sizeof(Image));
+  rVal->type = input->type;
+  rVal->width = input->width;
+  rVal->height = input->height;
+  rVal->pixels = calloc(input->width * input->height,sizeof(float));
+  int x,y;
+  for(x = 0; x < rVal->width; x++){
+    for(y = 0; y < rVal->height; y++){
+      safeSetPixel(rVal,x,y,safeGetPixel(input,x,y));
+    }
+  }
+  //draw contour points
+  int i,j;
+  int current_x,current_y;
+  active_contour_point * current = pt_list;
+  while(current->next != NULL){
+    current_x = current->x;
+    current_y = current->y;
+    for(j = -3; j < 4; j++){
+      safeSetPixel(rVal,current_x+j,current_y+j,0);
+      safeSetPixel(rVal,current_x+j,current_y-j,0);
+    }
+    current = (active_contour_point *)(current->next);
+  }
+  return rVal;
+}
 
